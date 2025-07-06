@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Trilha</title>
+  <style>
+body {
+  background: #000;
+  color: #f0f0f0;
+  font-family: monospace;
+  text-align: center;
+  margin-top: 30px;
+}
+
+#tabuleiro {
+  position: relative;
+  width: 420px;
+  height: 420px;
+  margin: auto;
+  background-color: #111;
+  border: 6px solid #222;
+  border-radius: 4px;
+  box-shadow: 0 0 25px #000 inset;
+}
+
+#tabuleiro svg line {
+  stroke: #d4af37;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.pos {
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle at center, #222 40%, #111);
+  border: 2px solid #d4af37;
+  border-radius: 50%;
+  position: absolute;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition: transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.pos:hover {
+  transform: translate(-50%, -50%) scale(1.2);
+  box-shadow: 0 0 8px #d4af37aa;
+}
+
+.p1 {
+  background: radial-gradient(circle at top left, #ff4d4d, #800000);
+  box-shadow: 0 0 10px #ff4d4daa;
+}
+
+.p2 {
+  background: radial-gradient(circle at top left, #4da6ff, #003366);
+  box-shadow: 0 0 10px #4da6ffaa;
+}
+  </style>
+</head>
+<body>
+  <h1>Trilha</h1>
+  <p id="status">Jogador atual: <span id="currentPlayer">X</span></p>
+  <div id="tabuleiro">
+
+    <svg width="420" height="420" style="position:absolute; top:0; left:0; z-index:0;">
+
+  <rect x="0" y="0" width="420" height="420" fill="none" />
+  <rect x="70" y="70" width="280" height="280" fill="none" />
+  <rect x="140" y="140" width="140" height="140" fill="none" />
+
+  <line x1="70" y1="210" x2="140" y2="210" />
+  <line x1="280" y1="210" x2="350" y2="210" />
+
+  <line x1="210" y1="70" x2="210" y2="140" />
+  <line x1="210" y1="280" x2="210" y2="350" />
+
+  <line x1="0" y1="210" x2="70" y2="210" />
+  <line x1="350" y1="210" x2="420" y2="210" />
+  <line x1="210" y1="0" x2="210" y2="70" />
+  <line x1="210" y1="350" x2="210" y2="420" />
+</svg>
+  </div>
+
+<button
+  onclick="reiniciarJogo()"
+  style="margin-top: 20px; padding: 8px 16px; font-family: monospace; background: none; color: #f0f0f0; border: 2px solid #555; border-radius: 4px; cursor: pointer;">
+    Reiniciar Jogo
+</button>
+
+  <script>
+    //Aderson Ramires
+    //Guilherme Sacon
+    //Uesley Serpa
+
+    const tabuleiro = document.getElementById("tabuleiro");
+    const statusText = document.getElementById("status");
+
+    // Posições no tabuleiro (x, y)
+    const posicoes = [
+      [0, 0],[210, 0],[420, 0],
+      [70, 70],[210, 70],[350, 70],
+      [140, 140],[210, 140],[280, 140],
+      [0, 210],[70, 210],[140, 210],[280, 210],[350, 210],[420, 210],
+      [140, 280],[210, 280],[280, 280],
+      [70, 350],[210, 350],[350, 350],
+      [0, 420],[210, 420],[420, 420]
+    ];
+
+    const adjacentes = {
+      0: [1, 9], 1: [0, 2, 4], 2: [1, 14], 3: [4, 10], 4: [1, 3, 5, 7],
+      5: [4, 13], 6: [7, 11], 7: [4, 6, 8], 8: [7, 12], 9: [0, 10, 21],
+      10: [3, 9, 11, 18], 11: [6, 10, 15], 12: [8, 13, 17], 13: [5, 12, 14, 20],
+      14: [2, 13, 23], 15: [11, 16], 16: [15, 17, 19], 17: [12, 16],
+      18: [10, 19], 19: [16, 18, 20, 22], 20: [13, 19], 21: [9, 22],
+      22: [19, 21, 23], 23: [14, 22]
+    };
+
+    const trilhas = [
+      [0,1,2],[3,4,5],[6,7,8],[15,16,17],[18,19,20],[21,22,23],
+      [0,9,21],[3,10,18],[6,11,15],[1,4,7],[16,19,22],[8,12,17],
+      [5,13,20],[2,14,23]
+    ];
+
+    function desenharLinhasAdjacentes() {
+  const svg = document.querySelector("#tabuleiro svg");
+
+  Object.entries(adjacentes).forEach(([fromIndex, conexoes]) => {
+    const [x1, y1] = posicoes[fromIndex];
+    conexoes.forEach(toIndex => {
+      // Evita desenhar linha duplicada
+      if (parseInt(fromIndex) < toIndex) {
+        const [x2, y2] = posicoes[toIndex];
+        const linha = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        linha.setAttribute("x1", x1);
+        linha.setAttribute("y1", y1);
+        linha.setAttribute("x2", x2);
+        linha.setAttribute("y2", y2);
+        linha.setAttribute("stroke", "#d4af37");
+        linha.setAttribute("stroke-width", "2");
+        linha.setAttribute("stroke-linecap", "round");
+        svg.appendChild(linha);
+      }
+    });
+  });
+}
+
+    let posMap = {};
+    let turn, placed, maxPieces, movingPhase, selected, removalPhase;
+    let trilhasFeitas = {1: [], 2: []};
+
+    function contarPecas(jogador) {
+      return Object.values(posMap).filter(v => v === jogador).length;
+    }
+
+    function criarTabuleiro() {
+  const svg = tabuleiro.querySelector("svg");
+  tabuleiro.innerHTML = "";         // Limpa tudo
+  tabuleiro.appendChild(svg);       // recoloca o SVG (do fundo)
+
+  posicoes.forEach((pos, i) => {
+    const el = document.createElement("div");
+    el.className = "pos";
+    el.style.left = `${pos[0]}px`;
+    el.style.top = `${pos[1]}px`;
+    el.dataset.id = i;
+    el.addEventListener("click", clicarPeca);
+    tabuleiro.appendChild(el);
+    posMap[i] = null;
+      });
+    }
+
+    function arraysIguais(a, b) {
+     return a.length === b.length && a.every(v => b.includes(v));
+    }
+
+    function formaTrilha(jogador) {
+    const novasTrilhas = trilhas.filter(trilha =>
+    trilha.every(pos => posMap[pos] === jogador) &&
+    !trilhasFeitas[jogador].some(t => arraysIguais(t, trilha))
+    );
+
+     if (novasTrilhas.length > 0) {
+    // Registra a nova trilha (só a primeira encontrada)
+    trilhasFeitas[jogador].push(novasTrilhas[0]);
+      return true;
+    }
+      return false;
+    }
+    
+    function podeMover(origem, destino) {
+      return adjacentes[origem]?.includes(parseInt(destino));
+    }
+
+    function nomeJogador(id) {
+      return id === 1 ? "Vermelho" : "Azul";
+    }
+
+function clicarPeca(e) {
+  const id = parseInt(e.target.dataset.id);
+
+  // Fase de REMOÇÃO
+  if (removalPhase) {
+    const adversario = turn === 1 ? 2 : 1;
+
+    if (posMap[id] === adversario) {
+      if (emTrilha(id)) {
+        const foraDeTrilha = Object.entries(posMap).some(([pos, dono]) =>
+          dono === adversario && !emTrilha(parseInt(pos))
+        );
+        if (foraDeTrilha) {
+          alert("Não pode remover peça que está em trilha. Escolha outra.");
+          return;
+        }
+      }
+
+      // Remoção permitida
+      e.target.classList.remove(`p${posMap[id]}`);
+      posMap[id] = null;
+      removalPhase = false;
+
+      if (movingPhase && contarPecas(adversario) <= 2) {
+        statusText.textContent = `Jogador ${nomeJogador(turn)} venceu!`;
+        desabilitarTabuleiro();
+        return;
+      }
+
+      turn = adversario;
+      statusText.textContent = movingPhase
+        ? `Jogador ${nomeJogador(turn)} move.`
+        : `Jogador ${nomeJogador(turn)} posiciona.`;
+      return;
+    } else {
+      alert("Você deve remover uma peça do adversário.");
+      return;
+    }
+  }
+
+  // Fase de POSICIONAMENTO
+  if (!movingPhase) {
+    if (posMap[id] === null && placed[turn] < maxPieces) {
+      posMap[id] = turn;
+      e.target.classList.add(`p${turn}`);
+      placed[turn]++;
+
+      if (formaTrilha(turn)) {
+        removalPhase = true;
+        statusText.textContent = `Jogador ${nomeJogador(turn)} formou uma trilha! Remova uma peça do adversário.`;
+        return;
+      }
+
+      const totalColocadas = placed[1] + placed[2];
+      if (totalColocadas === maxPieces * 2) {
+        movingPhase = true;
+        turn = turn === 1 ? 2 : 1;
+        statusText.textContent = `Fase de movimentação. Jogador ${nomeJogador(turn)} move.`;
+      } else {
+        turn = turn === 1 ? 2 : 1;
+        statusText.textContent = `Jogador ${nomeJogador(turn)} posiciona.`;
+      }
+    }
+  }
+
+  // Fase de MOVIMENTAÇÃO
+  else {
+    if (removalPhase) return;
+
+    if (selected === null) {
+      if (posMap[id] === turn) {
+        selected = id;
+        statusText.textContent = `Selecione uma posição ${contarPecas(turn) === 3 ? "livre" : "adjacente"} para mover.`;
+        e.target.style.transform = "translate(-50%, -50%) scale(1.4)";
+      } else {
+        statusText.textContent = "Selecione uma de suas próprias peças para mover.";
+      }
+    } else {
+      const podeVoar = contarPecas(turn) === 3;
+      if (posMap[id] === null && (podeVoar || podeMover(selected, id))) {
+        const origemEl = document.querySelector(`[data-id='${selected}']`);
+        origemEl.classList.remove(`p${turn}`);
+        origemEl.style.transform = "translate(-50%, -50%) scale(1)";
+        posMap[selected] = null;
+
+        posMap[id] = turn;
+        e.target.classList.add(`p${turn}`);
+        selected = null;
+
+        if (formaTrilha(turn)) {
+          removalPhase = true;
+          statusText.textContent = `Jogador ${nomeJogador(turn)} formou uma trilha! Remova uma peça do adversário.`;
+          return;
+        }
+
+        turn = turn === 1 ? 2 : 1;
+        statusText.textContent = `Fase de movimentação. Jogador ${nomeJogador(turn)} move.`;
+      } else {
+        const origemEl = document.querySelector(`[data-id='${selected}']`);
+        origemEl.style.transform = "translate(-50%, -50%) scale(1)";
+        selected = null;
+        statusText.textContent = "Movimento inválido. Selecione uma posição válida.";
+      }
+    }
+  }
+}
+
+    function emTrilha(posId) {
+      return trilhas.some(trilha =>
+        trilha.includes(posId) && trilha.every(pos => posMap[pos] === posMap[posId])
+      );
+    }
+
+    function desabilitarTabuleiro() {
+      document.querySelectorAll(".pos").forEach(el => {
+        el.removeEventListener("click", clicarPeca);
+        el.style.cursor = "default";
+      });
+    }
+
+    function reiniciarJogo() {
+      posMap = {};
+      turn = 1;
+      placed = {1: 0, 2: 0};
+      maxPieces = 9;
+      movingPhase = false;
+      selected = null;
+      removalPhase = false;
+      criarTabuleiro();
+      statusText.textContent = `Jogador ${nomeJogador(turn)} começa a posicionar.`;
+      trilhasFeitas = {1: [], 2: []};
+    }
+
+    reiniciarJogo();
+    desenharLinhasAdjacentes();
+  </script>
+</body>
+</html>
